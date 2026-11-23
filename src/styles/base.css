@@ -1,0 +1,17 @@
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: var(--font-ui);
+  cursor: default;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}

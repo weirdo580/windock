@@ -1,0 +1,36 @@
+# dependencies and build output
+node_modules/
+dist/
+release/
+prepackaged/
+.workbuddy/
+.tools/
+
+# local user configuration (contains personal software paths)
+app-config.json
+app-config.*.bak.json
+
+# local logs and temporary files
+*.log
+*.err
+*.tmp
+*.crdownload
+
+# local installers and archives
+*.exe
+*.zip
+
+# editor / OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# local screenshots that may contain personal desktop content
+desktop-sample.jpg
+liquid-glass-check.png
+preview.png
+preview-hover.png
+screen-check.png
+settings-check.png
+zoom-right.png

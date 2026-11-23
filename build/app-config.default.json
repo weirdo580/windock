@@ -1,0 +1,71 @@
+{
+  "apps": [
+    {
+      "id": "trash",
+      "name": "废纸篓",
+      "path": "shell:RecycleBinFolder",
+      "icon": "icons/trash.svg"
+    },
+    {
+      "id": "notepad",
+      "name": "记事本",
+      "path": "%WINDIR%\\System32\\notepad.exe",
+      "icon": "icons/notepad.svg"
+    },
+    {
+      "id": "explorer",
+      "name": "文件资源管理器",
+      "path": "%WINDIR%\\explorer.exe",
+      "icon": "icons/explorer.svg"
+    },
+    {
+      "type": "separator",
+      "id": "music-separator"
+    },
+    {
+      "type": "music",
+      "id": "music",
+      "name": "音乐"
+    },
+    {
+      "type": "separator",
+      "id": "windows-separator"
+    },
+    {
+      "type": "minimized",
+      "id": "minimized",
+      "name": "最小化窗口"
+    }
+  ],
+  "glass": {
+    "refraction": 0,
+    "fresnel": 0.39,
+    "blur": 1.06,
+    "opacity": 0,
+    "shadow": 0,
+    "radius": 30,
+    "saturation": 1,
+    "captureInterval": 100,
+    "captureWidth": 1920
+  },
+  "dock": {
+    "height": 52,
+    "iconSize": 36,
+    "maxScale": 1.36,
+    "magnification": true,
+    "effectStrength": 0.05,
+    "animationDuration": 80,
+    "autoHide": false,
+    "autoHideDelay": 650,
+    "autoHideDuration": 460,
+    "bounce": false,
+    "bottomMargin": 54,
+    "gap": 14,
+    "padding": 8
+  },
+  "global": {
+    "alwaysOnTop": false,
+    "tooltip": true,
+    "autoStart": false
+  }
+}

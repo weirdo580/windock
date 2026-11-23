@@ -1,0 +1,13 @@
+:root {
+  --font-ui: "SF Pro Text", -apple-system, "Segoe UI Variable Text", "Microsoft YaHei UI", system-ui, sans-serif;
+  --tip-bg: rgba(30, 30, 34, 0.74);
+  --tip-fg: #f5f5f7;
+  --accent: #0a84ff;
+  --radius-dock: 28px;
+  --radius-tip: 12px;
+}
+
+/* 玻璃面板淡入淡出、图标弹跳都放在这里统一调 */
+:root {
+  --bounce-duration: 420ms;
+}

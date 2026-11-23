@@ -1,0 +1,93 @@
+{
+  "name": "windock",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Windows 上的 Electron + Vue3 + WebGL 液态玻璃 Dock",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "vite build",
+    "start": "electron .",
+    "dist": "npm run build && electron-builder --win nsis",
+    "dist:portable": "npm run build && electron-builder --win portable"
+  },
+  "dependencies": {
+    "@screen-capture/node": "^1.1.0",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@esbuild/win32-x64": "^0.28.2",
+    "@rollup/rollup-win32-x64-msvc": "^4.68.8",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^37.2.0",
+    "electron-builder": "^25.1.8",
+    "vite": "^6.0.5",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.windock.desktop",
+    "productName": "WinDock",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/app-config.default.json",
+        "to": "app-config.json"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "electron/icon-extract.ps1",
+        "to": "icon-extract.ps1"
+      },
+      {
+        "from": "electron/media-bridge.ps1",
+        "to": "media-bridge.ps1"
+      },
+      {
+        "from": "electron/media-control.ps1",
+        "to": "media-control.ps1"
+      },
+      {
+        "from": "electron/win-bridge.ps1",
+        "to": "win-bridge.ps1"
+      },
+      {
+        "from": "electron/win-restore.ps1",
+        "to": "win-restore.ps1"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "WinDock",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    }
+  }
+}

@@ -1,0 +1,297 @@
+.stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.stage.is-over-icon {
+  cursor: grab;
+}
+
+.stage.is-dragging {
+  cursor: grabbing;
+}
+
+/* WebGL 玻璃层铺满窗口，不接收指针事件 */
+.glass-layer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 底座阴影：透明元素也能投 box-shadow，负责 Dock 的悬浮感 */
+.dock-shadow {
+  position: absolute;
+  border-radius: var(--radius-dock);
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+  z-index: 1;
+  transition: translate 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* WebGL 不可用时的兜底：静态玻璃底色，绝不白屏 */
+.dock-shadow.fallback {
+  background: rgba(24, 24, 28, 0.55);
+  backdrop-filter: blur(26px) saturate(1.4);
+  -webkit-backdrop-filter: blur(26px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.dock {
+  position: absolute;
+  pointer-events: none;
+  z-index: 3;
+  border-radius: var(--radius-dock);
+  transition: translate 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dock::before,
+.dock::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.13) 33%,
+    rgba(255, 255, 255, 0.46) 66%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  box-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.5),
+    inset 0 1px 3px rgba(255, 255, 255, 0.25);
+}
+
+.dock::before {
+  opacity: calc(var(--glass-fresnel, 0.86) * 0.23);
+  mix-blend-mode: screen;
+}
+
+.dock::after {
+  opacity: calc(var(--glass-fresnel, 0.86) * 0.72);
+  mix-blend-mode: overlay;
+}
+
+/* 自动隐藏时整体滑出窗口底部 */
+.stage.is-hidden .dock,
+.stage.is-hidden .dock-shadow {
+  translate: 0 140%;
+}
+
+.dock-icon {
+  position: absolute;
+  will-change: left, bottom, width, height, transform;
+  pointer-events: none;
+}
+
+.dock-icon-inner {
+  box-sizing: border-box;
+  width: 88%;
+  height: 88%;
+  margin: 6%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 22%;
+  will-change: transform;
+  transition: opacity 100ms ease, padding 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.dock-icon-inner.is-pending {
+  opacity: 0;
+}
+
+.dock-icon-inner.has-icon-frame {
+  padding: 12%;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.28),
+    rgba(138, 149, 168, 0.18)
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.dock-icon-inner.is-custom-icon {
+  padding: 0;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.dock-icon-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  -webkit-user-drag: none;
+}
+
+.dock-icon-inner.is-custom-icon .dock-icon-img {
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.dock-icon-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 22%;
+  background: linear-gradient(160deg, #6e6e73, #3a3a3c);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.dock-icon.is-dragging {
+  filter: brightness(1.14);
+  z-index: 12;
+  transform: translateY(-4px) scale(1.06);
+  transition: none;
+}
+
+.dock-icon.is-bouncing .dock-icon-inner {
+  animation: dock-bounce 1160ms cubic-bezier(0.3, 0.9, 0.4, 1);
+}
+
+/* 与 macOS 一致：打开应用时连续弹跳三次，逐次衰减，最后落回原位 */
+@keyframes dock-bounce {
+  0% { transform: translateY(0); }
+  12% { transform: translateY(-34%); }
+  26% { transform: translateY(0); }
+  38% { transform: translateY(-24%); }
+  50% { transform: translateY(0); }
+  60% { transform: translateY(-15%); }
+  70% { transform: translateY(0); }
+  78% { transform: translateY(-7%); }
+  86% { transform: translateY(0); }
+  100% { transform: translateY(0); }
+}
+
+/* 运行中的小圆点：浅色桌面用深色，深色桌面用浅色（与 macOS 一致） */
+.dock-run-dot {
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.25);
+}
+
+.theme-dark .dock-run-dot {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.55);
+}
+
+.dock-separator {
+  position: absolute;
+  width: 1.5px;
+  bottom: 50%;
+  transform: translateY(50%);
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.42) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.16);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* Tooltip */
+.glass-tooltip {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border-radius: var(--radius-tip);
+  background: var(--tip-bg);
+  color: var(--tip-fg);
+  font-size: 12.5px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+  z-index: 6;
+  animation: tip-in 160ms ease both;
+}
+
+@keyframes tip-in {
+  from { opacity: 0; translate: 0 4px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+/* 重命名面板 */
+.rename-panel {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(30, 30, 34, 0.72);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.32);
+  pointer-events: auto;
+  z-index: 7;
+}
+
+.rename-panel input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 7px 9px;
+}
+
+.rename-panel input:focus {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.55);
+}
+
+/* 提示气泡 */
+.toast {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  top: 8px;
+  max-width: 80%;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgba(30, 30, 34, 0.82);
+  color: #f5f5f7;
+  font-size: 12.5px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+  pointer-events: none;
+  z-index: 9;
+  animation: tip-in 160ms ease both;
+}
+
