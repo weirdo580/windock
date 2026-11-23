@@ -10,7 +10,7 @@
     <a href="#从源码运行"><img src="https://img.shields.io/badge/Vue-3.5-42B883" alt="Vue" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-3cbf91" alt="MIT License" /></a>
   </p>
-  <p><strong><a href="https://github.com/weirdo580/windock/releases/latest">下载 Windows 版</a></strong> · <a href="#功能">功能</a> · <a href="#从源码运行">从源码运行</a> · <a href="https://github.com/weirdo580/windock/issues">问题反馈</a></p>
+  <p><strong><a href="https://github.com/weirdo580/windock/releases/latest">下载 Windows 版</a></strong> · <a href="#功能">功能</a> · <a href="#从源码运行">从源码运行</a> · <a href="CHANGELOG.md">更新记录</a> · <a href="https://github.com/weirdo580/windock/issues">问题反馈</a></p>
 </div>
 
 WinDock 是给 Windows 桌面用的程序坞。它贴在屏幕底部，默认保持干净、轻巧；鼠标经过图标时会像 macOS 一样放大，点击即可启动应用。底座、Tooltip 和重命名面板使用 WebGL2 / GLSL 做实时折射、菲涅尔高光和轻微色散，不使用静态磨砂贴图。
