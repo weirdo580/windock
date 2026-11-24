@@ -1,6 +1,6 @@
 {
   "name": "windock",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Windows 上的 Electron + Vue3 + WebGL 液态玻璃 Dock",
   "main": "electron/main.cjs",
@@ -30,6 +30,7 @@
   "build": {
     "appId": "com.windock.desktop",
     "productName": "WinDock",
+    "afterPack": "build/after-pack.cjs",
     "directories": {
       "output": "release"
     },

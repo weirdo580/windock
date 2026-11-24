@@ -25,17 +25,20 @@ const lyricKey = ref('');
 const lyricIndex = ref(-1);
 const hover = ref(false);
 const art = ref('');
+const clockTick = ref(Date.now());
 let artKey = '';
 let badArt = '';
 let artRetry = 0;
 let artTimer = 0;
 let clockBase = 0;
 let clockAt = 0;
+let lastReportedPosition = -1;
 let optimisticPlaying = null;
 let optimisticUntil = 0;
 let mediaTimer = 0;
 let lyricTimer = 0;
 let pollTimer = 0;
+let clockTimer = 0;
 
 const hasSong = computed(() => !media.empty && !!media.title);
 const title = computed(() => (hasSong.value ? media.title : '未在播放'));
@@ -82,7 +85,8 @@ const progress = computed(() => {
 
 const clockPosition = computed(() => {
   if (!media.playing) return media.position;
-  const dt = (Date.now() - clockAt) / 1000;
+  // 订阅 clockTick，让进度条按帧刷新；不能只依赖 900ms 一次的状态轮询。
+  const dt = (clockTick.value - clockAt) / 1000;
   return Math.min(media.duration || 1e9, clockBase + dt);
 });
 
@@ -102,6 +106,7 @@ function applyMedia(state) {
     badArt = '';
     optimisticPlaying = null;
     optimisticUntil = 0;
+    lastReportedPosition = -1;
     return;
   }
   const reportedPlaying = !!state.playing;
@@ -116,16 +121,34 @@ function applyMedia(state) {
   const nextArtist = state.artist || '';
   const nextKey = `${nextTitle}|${nextArtist}`;
   const changedTitle = nextTitle !== media.title || nextArtist !== media.artist;
+  const reportedPosition = Number(state.position) || 0;
+  const previousPlaying = media.playing;
+  const nextPlaying = optimisticPlaying !== null ? optimisticPlaying : reportedPlaying;
+  // 很多播放器（例如汽水音乐）的 SMTC 只回报开头附近的位置，之后一直是同一个值。
+  // 这时不能每次轮询都把本地时钟拉回去，否则进度条会永远停在开头。
+  const localPosition = media.playing
+    ? Math.min(media.duration || 1e9, clockBase + (now - clockAt) / 1000)
+    : media.position;
+  const positionChanged = Math.abs(reportedPosition - lastReportedPosition) > 0.05;
+  const playChanged = nextPlaying !== previousPlaying;
+  const shouldSync = changedTitle || playChanged || (positionChanged && Math.abs(reportedPosition - localPosition) > 0.8);
+
   media.empty = false;
   media.title = nextTitle;
   media.artist = nextArtist;
-  media.playing = optimisticPlaying !== null ? optimisticPlaying : reportedPlaying;
-  media.position = Number(state.position) || 0;
+  media.playing = nextPlaying;
   media.duration = Number(state.duration) || 0;
   media.canNext = state.canNext !== false;
   media.canPrev = state.canPrev !== false;
-  clockBase = media.position;
-  clockAt = Date.now();
+  if (shouldSync) {
+    clockBase = reportedPosition;
+    clockAt = now;
+    clockTick.value = now;
+    media.position = reportedPosition;
+  } else {
+    media.position = localPosition;
+  }
+  lastReportedPosition = reportedPosition;
   if (changedTitle) {
     art.value = '';
     artKey = nextKey;
@@ -229,6 +252,7 @@ async function control(action, e) {
   media.position = previousPosition;
   clockBase = previousPosition;
   clockAt = Date.now();
+  clockTick.value = clockAt;
   media.playing = nextPlaying;
   optimisticPlaying = nextPlaying;
   optimisticUntil = Date.now() + 1800;
@@ -258,11 +282,16 @@ onMounted(() => {
   poll();
   mediaTimer = setInterval(poll, 900);
   lyricTimer = setInterval(syncLyric, 260);
+  // 用定时器而不是 rAF：Dock 是常驻非焦点窗口，rAF 可能被 Chromium 降频。
+  clockTimer = setInterval(() => {
+    if (media.playing) clockTick.value = Date.now();
+  }, 100);
 });
 
 onBeforeUnmount(() => {
   clearInterval(mediaTimer);
   clearInterval(lyricTimer);
+  clearInterval(clockTimer);
   clearTimeout(pollTimer);
   clearTimeout(artTimer);
 });
@@ -447,9 +476,9 @@ watch(() => media.title + media.artist, () => { syncLyric(); });
   left: 8px;
   right: 48px;
   bottom: 3px;
-  height: 2px;
+  height: 3px;
   border-radius: 2px;
-  background: rgba(30, 30, 40, 0.1);
+  background: rgba(30, 30, 40, 0.16);
   overflow: hidden;
 }
 
@@ -457,8 +486,8 @@ watch(() => media.title + media.artist, () => { syncLyric(); });
   display: block;
   height: 100%;
   border-radius: 2px;
-  background: rgba(10, 132, 255, 0.75);
-  transition: width 240ms linear;
+  background: rgba(10, 132, 255, 0.8);
+  transition: none;
 }
 
 .ctl-enter-active, .ctl-leave-active { transition: opacity 160ms ease, transform 160ms ease; }

@@ -8,6 +8,7 @@
 const { app, BrowserWindow, ipcMain, screen, desktopCapturer, session, Menu, shell, dialog, nativeImage, Tray } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { spawn, execFile } = require('child_process');
 const https = require('https');
 
@@ -22,6 +23,7 @@ let win = null;
 let settingsWin = null;
 let tray = null;
 let cfg = null;
+let captureProtection = null;
 let cfgPath = null;
 let previewDirty = false;      // 设置页正在实时预览、但尚未写入磁盘
 let captureCache = null;
@@ -241,6 +243,26 @@ function writeDockZone(bounds) {
   }
 }
 
+function glassNeedsProtectedCapture() {
+  const g = cfg && cfg.glass ? cfg.glass : {};
+  return Number(g.blur) > 0.05;
+}
+
+// 只在真正切换时调用，避免拖动滑杆的每一帧都重复设置导致 Dock 闪一下。
+function applyContentProtection() {
+  if (!win || win.isDestroyed()) return;
+  const next = glassNeedsProtectedCapture();
+  if (captureProtection === next) return;
+  captureProtection = next;
+  try { win.setContentProtection(next); } catch (err) { /* ignore */ }
+  // 让渲染层丢掉切换前那帧（里面可能还带着 Dock 图标），等干净帧再显示效果。
+  try {
+    if (win.webContents && !win.webContents.isDestroyed()) {
+      win.webContents.send('capture:reset', { protected: next, at: Date.now() });
+    }
+  } catch (err) { /* ignore */ }
+}
+
 function relayout() {
   if (!win || win.isDestroyed()) return;
   // “始终置顶”开关要即时生效，不能等 z 序守护进程下一轮（约 200ms）才动作；
@@ -248,6 +270,9 @@ function relayout() {
   if (win.setAlwaysOnTop) {
     win.setAlwaysOnTop(cfg.global.alwaysOnTop !== false, 'screen-saver');
   }
+  // 只有背景模糊/饱和度开启时才把 Dock 自身排除在桌面采样之外；
+  // 这样映射层只拿得到壁纸/其他窗口，不会复制 Dock 图标形成重影。
+  applyContentProtection();
   const b = computeBounds();
   writeDockZone(b);
   try {
@@ -330,11 +355,8 @@ function createWindow() {
   if (win.setAlwaysOnTop && cfg.global.alwaysOnTop !== false) win.setAlwaysOnTop(true, 'screen-saver');
   // 告诉 z 序守护进程 Dock 底板的实际位置（窗口随即可能被沉到软件窗口下面）
   writeDockZone(bounds);
-  // 排除自身，桌面采样时不会把 Dock 自己拍进纹理，避免玻璃重复叠加
-  // （--no-protect 仅用于开发时用系统截图核对真实观感）
-  if (!process.argv.includes('--no-protect')) {
-    try { win.setContentProtection(true); } catch (err) { /* 部分系统不支持 */ }
-  }
+  // 采样时按需排除 Dock 窗口自身，避免把图标/组件复制进玻璃背景造成色散重影。
+  applyContentProtection();
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
   // 初始全部穿透，鼠标移入图标带后由渲染进程关掉穿透
@@ -522,6 +544,17 @@ function processNameOf(item) {
 // Chromium 的桌面捕获在指针压到受保护窗口上时仍会把指针录进画面，导致玻璃里出现第二个指针。
 let wgcScreen = null;
 let wgcLatest = null;
+let wgcLastEmit = 0;
+
+function glassCaptureInterval() {
+  const n = Number(cfg && cfg.glass && cfg.glass.captureInterval);
+  return Math.max(100, Math.min(60000, Number.isFinite(n) ? n : 1000));
+}
+
+function glassCaptureWidth() {
+  const n = Number(cfg && cfg.glass && cfg.glass.captureWidth);
+  return Math.max(320, Math.min(1920, Math.round(Number.isFinite(n) ? n : 1920)));
+}
 
 async function startWgcCapture() {
   if (process.platform !== 'win32' || wgcScreen) return;
@@ -535,18 +568,30 @@ async function startWgcCapture() {
       minimumUpdateIntervalMs: 33
     });
     wgcScreen = capture;
+    wgcLastEmit = 0;
     await capture.start();
     (async () => {
       for await (const frame of capture) {
         if (wgcScreen !== capture) break;
+        const now = Date.now();
+        // 设置页的“采样间隔”控制玻璃背景的刷新频率。
+        if (now - wgcLastEmit < glassCaptureInterval()) continue;
         const display = screen.getPrimaryDisplay();
         // 玻璃只显示 Dock 那一条，没必要每帧解码整屏；抓底部一条即可。
         const stripH = Math.min(380, Math.max(240, Math.round(display.size.height * 0.4)));
         const physicalTop = Math.max(0, frame.height - Math.round(stripH * frame.height / Math.max(1, display.size.height)));
         const strip = frame.crop(0, physicalTop, frame.width, frame.height);
-        const jpeg = strip.encode(ImageFormat.Jpeg);
+        let jpeg = strip.encode(ImageFormat.Jpeg);
+        const targetWidth = glassCaptureWidth();
+        if (targetWidth < strip.width) {
+          try {
+            const image = nativeImage.createFromBuffer(jpeg);
+            if (!image.isEmpty()) jpeg = image.resize({ width: targetWidth, quality: 'good' }).toJPEG(88);
+          } catch (err) { /* 缩放失败时保留原始帧 */ }
+        }
+        wgcLastEmit = now;
         wgcLatest = {
-          at: Date.now(),
+          at: now,
           payload: {
             dataUrl: 'data:image/jpeg;base64,' + jpeg.toString('base64'),
             display: {
@@ -560,7 +605,7 @@ async function startWgcCapture() {
               y: display.size.height - stripH,
               height: stripH
             },
-            capturedAt: Date.now(),
+            capturedAt: now,
             source: 'wgc'
           }
         };
@@ -585,11 +630,11 @@ async function captureDesktop() {
   if (wgcLatest) return wgcLatest.payload;
   const display = screen.getPrimaryDisplay();
   const now = Date.now();
-  const interval = Math.max(120, Number(cfg.glass.captureInterval) || 15000);
+  const interval = glassCaptureInterval();
   if (captureCache && now - captureCache.at < interval) return captureCache.payload;
 
-  // 指针在 Dock 上时跳过采样：桌面复制很吃 CPU，采样会打断放大动画
-  const width = Math.min(1920, Math.max(320, Math.round(Number(cfg.glass.captureWidth) || 512)));
+  // 缩略图兜底同样遵守设置页的采样宽度。
+  const width = glassCaptureWidth();
   const height = Math.round(width * display.size.height / Math.max(1, display.size.width));
 
   try {
@@ -641,7 +686,9 @@ function extractIconViaPS(exe) {
       ? path.join(process.resourcesPath, 'icon-extract.ps1')
       : path.join(__dirname, 'icon-extract.ps1');
     if (!fs.existsSync(script)) return resolve(null);
-    const out = path.join(app.getPath('temp'), 'dockicon-' + Buffer.from(exe).toString('hex').slice(0, 20) + '.png');
+    // 临时文件名必须按完整路径哈希，不能只取前 20 个十六进制字符：
+    // 同一个用户目录下的快捷方式前缀完全相同，会互相覆盖导致图标串号。
+    const out = path.join(app.getPath('temp'), 'dockicon-' + crypto.createHash('sha1').update(exe).digest('hex') + '.png');
     try { if (fs.existsSync(out)) fs.unlinkSync(out); } catch (err) {}
     execFile(MEDIA_PS, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, exe, out], { windowsHide: true, timeout: 10000 }, () => {
       try {

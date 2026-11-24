@@ -114,7 +114,7 @@ function clampDraft(config) {
   g.refraction = clamp(g.refraction, 0, 1);
   g.fresnel = clamp(g.fresnel, 0, 1.8);
   g.blur = clamp(g.blur, 0, 2.5);
-  g.saturation = clamp(g.saturation, 1, 1.8);
+  g.saturation = 1;
   g.opacity = clamp(g.opacity, 0, 0.35);
   g.captureInterval = clamp(g.captureInterval, 100, 60000);
   g.captureWidth = clamp(g.captureWidth, 320, 1920);
@@ -308,7 +308,7 @@ const previewDockStyle = computed(() => {
     gap: gap + 'px',
     borderRadius: (Number(g.radius) || 26) + 'px',
     background: 'rgba(255,255,255,' + Math.max(0.06, Math.min(0.24, (Number(g.opacity) || 0.05) + 0.09)).toFixed(2) + ')',
-    backdropFilter: 'blur(' + Math.max(8, (Number(g.blur) || 0.9) * 14).toFixed(0) + 'px) saturate(' + (Number(g.saturation) || 1.2) + ')',
+    backdropFilter: 'blur(' + Math.max(8, (Number(g.blur) || 0.9) * 14).toFixed(0) + 'px)',
     boxShadow: 'inset 0 1px 0 rgba(255,255,255,.28)'
   };
 });
@@ -471,17 +471,12 @@ watch(draft, () => {
           <section class="panel-grid">
             <article class="setting-card">
               <div class="card-heading">
-                <div><h2>玻璃轮廓</h2><p>调整底板圆角和边缘的折射光泽。</p></div>
+                <div><h2>玻璃轮廓</h2><p>调整底板圆角和边缘高光。</p></div>
               </div>
               <label class="setting-row">
                 <span><b>圆角</b><small>Dock 玻璃底板的圆角半径</small></span>
                 <output>{{ draft.glass.radius }} px</output>
                 <input v-model.number="draft.glass.radius" type="range" min="10" max="30" step="1" />
-              </label>
-              <label class="setting-row">
-                <span><b>边缘折射</b><small>靠近边缘时的背景弯曲强度</small></span>
-                <output>{{ Math.round(draft.glass.refraction * 100) }}%</output>
-                <input v-model.number="draft.glass.refraction" type="range" min="0" max="1" step="0.01" />
               </label>
               <label class="setting-row">
                 <span><b>边缘高光</b><small>Fresnel 反射与轮廓亮度</small></span>
@@ -491,17 +486,12 @@ watch(draft, () => {
             </article>
             <article class="setting-card">
               <div class="card-heading">
-                <div><h2>背景与控制</h2><p>调整玻璃的清晰度、色彩和透明度。</p></div>
+                <div><h2>背景与控制</h2><p>调整玻璃的清晰度和透明度。</p></div>
               </div>
               <label class="setting-row">
                 <span><b>背景模糊</b><small>透过玻璃看到的桌面柔化程度</small></span>
                 <output>{{ Number(draft.glass.blur).toFixed(2) }}</output>
                 <input v-model.number="draft.glass.blur" type="range" min="0" max="2.5" step="0.01" />
-              </label>
-              <label class="setting-row">
-                <span><b>色彩饱和度</b><small>玻璃内部背景的饱和度</small></span>
-                <output>{{ Number(draft.glass.saturation).toFixed(2) }}×</output>
-                <input v-model.number="draft.glass.saturation" type="range" min="1" max="1.8" step="0.01" />
               </label>
               <label class="setting-row">
                 <span><b>玻璃浓度</b><small>数值越高，玻璃主体越明显</small></span>
@@ -525,7 +515,7 @@ watch(draft, () => {
                   <input v-model.number="draft.glass.captureWidth" type="range" min="320" max="1920" step="16" />
                 </label>
               </div>
-              <div class="hint-line">建议间隔 10–30 秒；指针停在 Dock 上时会自动暂停采样。高分辨率屏幕无需把宽度拉到物理分辨率。</div>
+              <div class="hint-line">建议间隔 10–30 秒；高分辨率屏幕无需把宽度拉到物理分辨率。</div>
             </article>
           </section>
         </template>

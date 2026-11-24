@@ -225,9 +225,38 @@ const dockBox = computed(() => ({
   '--glass-fresnel': `${Number(cfg.glass.fresnel ?? 0.86)}`
 }));
 
+// 自动隐藏后保留的底部细线：宽度固定为 iOS 底部横条那种短条，居中显示。
+const COLLAPSED_LINE_WIDTH = 118;
+const autoHideDurationMs = computed(() => {
+  const raw = Number(cfg.dock.autoHideDuration);
+  return Number.isFinite(raw) ? Math.max(100, Math.min(1200, raw)) : 460;
+});
+const autoHideDurationCss = computed(() => `${autoHideDurationMs.value}ms`);
+const autoHideLineDelayCss = computed(() => `${Math.round(autoHideDurationMs.value * 0.6)}ms`);
+const glassCaptureOffset = computed(() => {
+  const d = cfg.dock;
+  // 底部留白够高时，直接取 Dock 下方那块真实桌面，避开 Dock 自身和悬浮提示；
+  // 留白太少时退回取 Dock 上方一条。
+  return d.bottomMargin >= d.height - 8 ? -Number(d.bottomMargin) : Number(d.height) + 6;
+});
+const collapsedLineBox = computed(() => {
+  const width = Math.min(COLLAPSED_LINE_WIDTH, view.width || COLLAPSED_LINE_WIDTH);
+  return {
+    left: view.left + (view.width - width) / 2,
+    width,
+    bottom: cfg.dock.bottomMargin
+  };
+});
+
+const collapsedLine = computed(() => ({
+  left: collapsedLineBox.value.left + 'px',
+  bottom: collapsedLineBox.value.bottom + 'px',
+  width: collapsedLineBox.value.width + 'px'
+}));
+
 const glassPanels = computed(() => {
   const list = [];
-  if (!winW.value) return list;
+  if (!winW.value || hidden.value) return list;
   const d = cfg.dock;
   list.push({
     x: view.left,
@@ -280,6 +309,13 @@ function inDockBand(x, y) {
   if (hidden.value) return false;
   const top = winH.value - d.bottomMargin - d.height - d.iconSize * (maxScaleOf() - 1) - 10;
   return x >= view.left - 12 && x <= view.left + view.width + 12 && y >= top && y <= winH.value;
+}
+
+function inHiddenRevealBand(x, y) {
+  const d = cfg.dock;
+  const line = collapsedLineBox.value;
+  const top = winH.value - d.bottomMargin - 18;
+  return x >= line.left - 40 && x <= line.left + line.width + 40 && y >= top && y <= winH.value;
 }
 
 function hitIcon(x, y) {
@@ -450,7 +486,16 @@ const bandTop = computed(() => {
 
 const hitRects = computed(() => {
   if (dragging.value) return [{ x: 0, y: 0, w: winW.value, h: winH.value }];
-  if (hidden.value) return [{ x: 0, y: winH.value - 8, w: winW.value, h: 8 }];
+  if (hidden.value) {
+    // 收起后 Dock 只剩中间一小段横条；命中区域跟着横条收窄，
+    // 鼠标回到横条附近时由主进程解除穿透并触发重新展开。
+    const d = cfg.dock;
+    const line = collapsedLineBox.value;
+    const top = Math.max(0, winH.value - d.bottomMargin - 18);
+    const x = Math.max(0, line.left - 40);
+    const w = Math.max(32, Math.min(winW.value - x, line.width + 80));
+    return [{ x, y: top, w, h: Math.max(24, winH.value - top) }];
+  }
   // 文件夹展开时，整个 Dock 窗口都接收点击：点任意空白处都能关闭弹层，
   // 弹层和文件夹自身会在组件里阻止事件冒泡，不会误关。
   if (folderOpen.value) return [{ x: 0, y: 0, w: winW.value, h: winH.value }];
@@ -493,7 +538,7 @@ function onPointerMove(e) {
   winW.value = window.innerWidth;
   winH.value = window.innerHeight;
 
-  if (hidden.value && pointer.y > winH.value - 10) hidden.value = false;
+  if (hidden.value && inHiddenRevealBand(pointer.x, pointer.y)) hidden.value = false;
   startLoop();
 
   if (cfg.dock.autoHide) {
@@ -826,6 +871,11 @@ function applyConfig(next) {
   cfg.glass = { ...(next.glass || {}) };
   cfg.dock = { ...(next.dock || {}) };
   cfg.global = { ...(next.global || {}) };
+  // 设置页关闭自动隐藏时，已经收起的 Dock 必须立即展开，和设置保持同步。
+  if (!cfg.dock.autoHide) {
+    clearTimeout(hideTimer);
+    hidden.value = false;
+  }
   ensureAnims();
   startLoop();
   refreshSystemIcons();
@@ -863,7 +913,7 @@ onMounted(async () => {
     pointer.active = true;
     winW.value = window.innerWidth;
     winH.value = window.innerHeight;
-    if (hidden.value && pointer.y > winH.value - 10) hidden.value = false;
+    if (hidden.value && inHiddenRevealBand(pointer.x, pointer.y)) hidden.value = false;
     updateHover();
     startLoop();
   });
@@ -915,6 +965,7 @@ onBeforeUnmount(() => {
   <div
     ref="stageRef"
     class="stage"
+    :style="{ '--auto-hide-duration': autoHideDurationCss, '--auto-hide-line-delay': autoHideLineDelayCss }"
     :class="{ 'is-hidden': hidden, 'is-dragging': !!dragging && dragging.moved, 'is-over-icon': hovering >= 0 }"
     @pointermove="onPointerMove"
     @pointerleave="onPointerLeave"
@@ -930,10 +981,13 @@ onBeforeUnmount(() => {
       :pointer="pointer"
       :glass="cfg.glass"
       :winInfo="winInfo"
+      :capture-offset="glassCaptureOffset"
       @fallback="glassFallback = true"
     />
 
     <div v-if="glassFallback" class="dock-shadow fallback" :style="dockBox"></div>
+
+    <div class="dock-collapsed-line" :style="collapsedLine" aria-hidden="true"></div>
 
     <div class="dock" :style="dockBox">
       <template v-for="item in layoutItems" :key="item.id">

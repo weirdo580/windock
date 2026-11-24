@@ -21,6 +21,11 @@ contextBridge.exposeInMainWorld('dockApi', {
   emptyTrash: () => ipcRenderer.invoke('app:empty-trash'),
 
   capture: () => ipcRenderer.invoke('desktop:capture'),
+  onCaptureReset: (cb) => {
+    const listener = (e, payload) => cb(payload);
+    ipcRenderer.on('capture:reset', listener);
+    return () => ipcRenderer.removeListener('capture:reset', listener);
+  },
 
   mediaGet: () => ipcRenderer.invoke('media:get'),
   mediaControl: (action) => ipcRenderer.invoke('media:control', action),

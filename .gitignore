@@ -19,6 +19,8 @@ app-config.*.bak.json
 # local installers and archives
 *.exe
 *.zip
+# 打包阶段用于写入 exe 图标的最小工具，随源码分发
+!build/rcedit-x64.exe
 
 # editor / OS files
 .DS_Store
