@@ -18,5 +18,5 @@ const style = computed(() => ({
 </script>
 
 <template>
-  <div class="glass-tooltip" :style="style">{{ label }}</div>
+  <div class="glass-tooltip" :style="style"><span class="tip-text">{{ label }}</span></div>
 </template>

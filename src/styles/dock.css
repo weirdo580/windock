@@ -267,12 +267,23 @@
   font-size: 12.5px;
   letter-spacing: 0.2px;
   white-space: nowrap;
+  overflow: hidden;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
   pointer-events: none;
   z-index: 6;
   animation: tip-in 160ms ease both;
+}
+
+/* 文字超出框宽时裁切并以省略号收尾，框宽固定不再被文字撑破 */
+.glass-tooltip .tip-text {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @keyframes tip-in {
@@ -332,3 +343,72 @@
   animation: tip-in 160ms ease both;
 }
 
+
+/* 点开最小化缩略图时接手的“幽灵”副本：绝对定位、不参与布局，
+   与 Dock 弹簧收拢同时进行（缩略图抬起缩小淡出的同时右侧空间收回） */
+.min-ghost {
+  position: absolute;
+  pointer-events: none;
+  z-index: 5;
+  will-change: transform, opacity;
+}
+
+.min-ghost-visual {
+  box-sizing: border-box;
+  width: 88%;
+  height: 88%;
+  margin: 6%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 22%;
+  transform-origin: 50% 100%;
+  will-change: transform, opacity;
+  animation: min-ghost-out 160ms cubic-bezier(0.25, 0.9, 0.35, 1) both;
+}
+
+.min-ghost-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  -webkit-user-drag: none;
+}
+
+.min-ghost-visual.has-icon-frame {
+  padding: 12%;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.28), rgba(138, 149, 168, 0.18));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.min-ghost-visual.is-pending {
+  opacity: 0;
+}
+
+.min-ghost-letter {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: inherit;
+  background: linear-gradient(160deg, #6e6e73, #3a3a3c);
+  color: #fff;
+  font-size: 20px;
+}
+
+@keyframes min-ghost-out {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  38% {
+    opacity: 1;
+    transform: translateY(-38px) scale(0.94);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-64px) scale(0.78);
+  }
+}

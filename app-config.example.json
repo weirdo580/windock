@@ -46,7 +46,8 @@
     "radius": 30,
     "saturation": 1,
     "captureInterval": 100,
-    "captureWidth": 1920
+    "captureWidth": 0,
+    "captureWidthAuto": true
   },
   "dock": {
     "height": 52,
@@ -59,7 +60,7 @@
     "autoHideDelay": 650,
     "autoHideDuration": 460,
     "bounce": false,
-    "bottomMargin": 54,
+    "bottomMargin": 0,
     "gap": 14,
     "padding": 8
   },

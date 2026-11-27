@@ -2,7 +2,7 @@
   <img src="docs/images/icon.png" width="112" alt="WinDock" />
   <h1>WinDock</h1>
   <p><strong>把 macOS 式程序坞，放进 Windows 桌面。</strong></p>
-  <p>一个不依赖 <code>backdrop-filter</code> 的液态玻璃 Dock，图标会跟着鼠标放大，常用软件、文件夹、音乐和最小化窗口都在手边。</p>
+  <p>一个不依赖 <code>backdrop-filter</code> 的液态玻璃 Dock：图标会跟着鼠标放大，常用软件、文件夹、音乐、最小化窗口，以及 Wi‑Fi / 音量 / 电池状态都在手边。</p>
   <p>
     <a href="https://github.com/weirdo580/windock/releases/latest"><img src="https://img.shields.io/github/v/release/weirdo580/windock?color=4f8cff&amp;label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC" alt="最新版本" /></a>
     <a href="#下载安装"><img src="https://img.shields.io/badge/Windows-10%20%2F%2011-0078D4" alt="Windows" /></a>
@@ -13,7 +13,7 @@
   <p><strong><a href="https://github.com/weirdo580/windock/releases/latest">下载 Windows 版</a></strong> · <a href="#功能">功能</a> · <a href="#从源码运行">从源码运行</a> · <a href="CHANGELOG.md">更新记录</a> · <a href="https://github.com/weirdo580/windock/issues">问题反馈</a></p>
 </div>
 
-WinDock 是给 Windows 桌面用的程序坞。它贴在屏幕底部，默认保持干净、轻巧；鼠标经过图标时会像 macOS 一样放大，点击即可启动应用。底座、Tooltip 和重命名面板使用 WebGL2 / GLSL 做实时折射、菲涅尔高光和轻微色散，不使用静态磨砂贴图。
+WinDock 是给 Windows 桌面用的程序坞。它贴在屏幕底部，默认保持干净、轻巧；鼠标经过图标时会像 macOS 一样放大，点击即可启动应用。底座、Tooltip 和重命名面板使用 WebGL2 / GLSL 做实时折射、菲涅尔高光和轻微色散，不使用静态磨砂贴图。最右侧是一枚常驻的系统状态胶囊，点开就是一套仿 Windows 的快捷设置面板。
 
 ![WinDock 桌面 Dock](docs/images/hero.png)
 
@@ -24,7 +24,21 @@ WinDock 是给 Windows 桌面用的程序坞。它贴在屏幕底部，默认保
 - WebGL2 实时渲染曲面折射和边缘高光，跟随桌面画面变化。
 - 通过 `desktopCapturer` 采样真实桌面；开启背景模糊时用 `setContentProtection` 把 Dock 自身排除在采样之外，避免图标被复制到背景里。
 - 设置页可以调整采样间隔、采样宽度、圆角、边缘高光和背景模糊。
+- 采样宽度默认「自动」：按主屏物理宽度（分辨率 × 缩放比例）实时计算，换显示器、改缩放比例不用再手动填数值；也可以写死一个宽度。
+- 底边留白同样支持自动档：跟着任务栏高度走，任务栏隐藏、变高、换了显示器都会自己重算。
 - DRM 受保护视频、UAC 安全桌面和部分独占全屏游戏无法被普通桌面程序采样，此时使用分析环境色兜底，不会退化成 CSS 毛玻璃。
+
+### 系统状态栏与快捷面板
+
+Dock 最右侧是一枚独立的状态胶囊，和左侧图标区用分隔线隔开，内容来自本机真实状态而不是摆设：
+
+- **Wi‑Fi**：读取当前连接的网络名，悬停显示名称，点击打开网络列表。
+- **音量**：读取系统主音量与静音状态，图标跟着档位变化。
+- **电池**：显示剩余电量百分比和充电状态，满电、低电、充电中各有不同的图标形态。
+- 点一下胶囊展开**快捷面板**：Wi‑Fi 列表（已连接 / 已保存 / 需要密码）、飞行模式、省电模式、亮度滑杆、音量滑杆和电池页脚，交互和 Windows 自带面板一致。
+- **能力自检**：首次启动时探测本机硬件——台式机没有电池、没有亮度调节、没有无线网卡、只有一种输入法时，对应模块直接不显示，不给你留一堆点了没反应的假控件。
+
+![系统状态胶囊：Wi-Fi、音量、电池](docs/images/status.png)
 
 ### 图标、文件夹和拖放
 
@@ -32,7 +46,7 @@ WinDock 是给 Windows 桌面用的程序坞。它贴在屏幕底部，默认保
 - 点击图标启动程序，运行时显示小圆点；可开启点击回弹。
 - 拖入 `.exe`、`.lnk`、图片或普通文件，自动提取图标并插入到废纸篓之前。
 - 拖动 Dock 图标可以重新排序，顺序会写入配置；废纸篓固定在最右侧。
-- 文件夹图标支持弹出式内容面板，常用文件不用反复开资源管理器。
+- 文件夹图标支持弹出式内容面板，常用文件不用反复开资源管理器；面板高度按可用空间自适应，不会压住 Dock，也不会出现滚动条。
 - 每个软件都可以更换自定义图标，也可以一键恢复默认图标。
 
 ### 音乐和最小化窗口
@@ -46,19 +60,22 @@ WinDock 是给 Windows 桌面用的程序坞。它贴在屏幕底部，默认保
 
 - 独立设置窗口，修改图标大小、Dock 高度、间距、圆角、玻璃参数、显示行为后立即同步到桌面 Dock。
 - 设置项按「Dock / 液态玻璃 / 软件 / 行为」分组，支持实时预览、自动保存和放弃未保存修改。
+- **首次启动引导**：装好后第一次打开设置页，会先给一张「三步把 WinDock 用顺手」的卡片——去哪添加应用、外观改动是即时的、怎么开机自启，看完就能用。
 - 托盘菜单可以打开设置、显示 Dock 或退出程序；再次启动 WinDock 会唤起已有实例并打开设置。
 - 支持开机自启动、始终置顶、自动隐藏、悬停名称提示和收起后的底部细线。
 - 单实例运行，避免重复启动多个 Dock。
+
+![首次启动的三步引导](docs/images/welcome.png)
 
 ![WinDock 设置页](docs/images/settings.png)
 
 ## 下载安装
 
-前往 **[最新正式版](https://github.com/weirdo580/windock/releases/latest)**：
+前往 **[最新正式版](https://github.com/weirdo580/windock/releases/latest)**（当前为 **v1.1.0**）：
 
 | 下载文件 | 使用方式 |
 | --- | --- |
-| `WinDock-Setup-1.0.1.exe` | **推荐**。双击安装，可选择安装目录，创建桌面和开始菜单快捷方式 |
+| `WinDock-Setup-1.1.0.exe` | **推荐**。双击安装，可选择安装目录，创建桌面和开始菜单快捷方式 |
 | `SHA256SUMS.txt` | 下载校验，可用 PowerShell `Get-FileHash -Algorithm SHA256` 比对 |
 
 安装完成后运行 `WinDock.exe`，Dock 会显示在屏幕底部。需要修改设置时，可以再次双击 `WinDock.exe`（已运行时只会唤起设置窗口），或从托盘菜单选择「打开设置」。
@@ -128,19 +145,25 @@ npm run dist:portable
     "height": 52,
     "iconSize": 36,
     "maxScale": 1.36,
-    "autoHide": false
+    "autoHide": false,
+    "bottomMargin": 0
   },
   "glass": {
     "refraction": 0,
     "fresnel": 0.39,
     "blur": 1.06,
     "opacity": 0,
-    "radius": 30
+    "radius": 30,
+    "captureInterval": 100,
+    "captureWidth": 0,
+    "captureWidthAuto": true
   }
 }
 ```
 
 `path` 支持 exe、lnk 和普通文件，也支持 `%WINDIR%` 这类环境变量；`icon` 支持 png、ico、svg、jpg、webp，留空则自动提取程序图标。
+
+`captureWidth: 0` 且 `captureWidthAuto: true` 表示采样宽度自动跟随主屏；`bottomMargin: 0` 表示底边留白自动跟随任务栏，写入具体数值则以写死的为准。
 
 ## 项目结构
 
@@ -149,13 +172,18 @@ electron/main.cjs                  透明窗口、桌面采样、托盘、配置
 electron/preload.cjs               安全 IPC 白名单
 electron/win-bridge.ps1            Dock 与普通窗口的层级协调
 electron/media-bridge.ps1          Windows 媒体会话读取
+electron/status-watch.ps1          状态栏采样：音量、Wi-Fi、电池、硬件能力探测
+electron/status-act.ps1            状态栏点击动作（音量、网络、电池）
+electron/quick-act.ps1             快捷面板动作：Wi-Fi 连接、飞行模式、亮度
 src/App.vue                        Dock 状态、磁吸曲线、拖拽和自动隐藏
-src/SettingsApp.vue                独立设置页与实时预览
+src/SettingsApp.vue                独立设置页、实时预览与首次启动引导
 src/components/LiquidGlass.vue     WebGL2 生命周期与高分屏映射
 src/components/DockIcon.vue        图标、运行圆点、弹跳与拖拽事件
 src/components/DockFolder.vue      文件夹弹出面板
 src/components/MusicTile.vue       音乐播放条
 src/components/MinimizedZone.vue   最小化窗口区
+src/components/StatusTray.vue      系统状态胶囊
+src/components/QuickPanel.vue      仿系统快捷设置面板
 src/shaders/                       GLSL 折射、环境色和菲涅尔
 public/icons/                      默认示例图标
 build/                             图标、默认配置和打包脚本
@@ -164,6 +192,7 @@ build/                             图标、默认配置和打包脚本
 ## 隐私与限制
 
 - WinDock 不包含遥测、账号系统或自建上传后台；软件列表、图标和窗口状态都留在本机。
+- 状态栏读取的音量、电量、网络名称只在本机显示，不会上传；不支持的硬件会直接隐藏对应模块。
 - 安装版的配置保存在 `%APPDATA%\WinDock\app-config.json`，可能包含你自己的软件路径。提交 Issue 或截图前请先脱敏。
 - 桌面采样只在本地用于玻璃渲染，不会上传；受 Windows 安全策略保护的画面无法采样。
 - 音乐组件依赖播放器提供的 Windows 媒体会话；没有媒体信息时显示「未在播放」，个别播放器可能不兼容。

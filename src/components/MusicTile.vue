@@ -24,12 +24,18 @@ const lyricLines = ref([]);
 const lyricKey = ref('');
 const lyricIndex = ref(-1);
 const hover = ref(false);
+// 封面实时跟当前这首歌：优先用播放器给的原图（SMTC 缩略图），
+// 播放器不给（汽水音乐就是不给）就按「歌名 + 歌手 + 时长」去网上找同一首歌的封面。
+// 换歌到新封面到达之间一直显示上一张，绝不出现空白方块。
 const art = ref('');
+const lastArt = ref('');
 const clockTick = ref(Date.now());
+let wantKey = '';
 let artKey = '';
-let badArt = '';
-let artRetry = 0;
+let artTries = 0;
 let artTimer = 0;
+let artPending = false;
+let badArt = '';
 let clockBase = 0;
 let clockAt = 0;
 let lastReportedPosition = -1;
@@ -44,33 +50,88 @@ const hasSong = computed(() => !media.empty && !!media.title);
 const title = computed(() => (hasSong.value ? media.title : '未在播放'));
 const artist = computed(() => (hasSong.value && media.artist ? media.artist : (hasSong.value ? '本地媒体' : '播放音乐后自动接入')));
 
-function makeFallbackArt(trackTitle, trackArtist) {
-  const source = `${trackTitle || ''}|${trackArtist || ''}` || 'WinDock Music';
-  let hash = 2166136261;
-  for (let i = 0; i < source.length; i++) {
-    hash ^= source.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  const hue = Math.abs(hash) % 360;
-  const hue2 = (hue + 54) % 360;
-  const initial = Array.from(String(trackTitle || '').trim())[0] || '♪';
-  const safeInitial = initial.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+// 只有「本次运行还一张封面都没拿到过」时才会用到这张占位图，拿到真封面后就不再出现。
+function makeFallbackArt() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
     <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="hsl(${hue} 72% 58%)"/><stop offset="1" stop-color="hsl(${hue2} 64% 36%)"/>
-    </linearGradient><radialGradient id="r" cx=".2" cy=".12" r=".9">
-      <stop stop-color="#fff" stop-opacity=".46"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
-    </radialGradient></defs>
-    <rect width="96" height="96" rx="22" fill="url(#g)"/><rect width="96" height="96" rx="22" fill="url(#r)"/>
-    <circle cx="76" cy="20" r="18" fill="#fff" fill-opacity=".09"/>
+      <stop stop-color="hsl(208 72% 58%)"/><stop offset="1" stop-color="hsl(262 64% 40%)"/>
+    </linearGradient></defs>
+    <rect width="96" height="96" rx="22" fill="url(#g)"/>
     <path d="M36 65a8 8 0 1 0 4 6.9V37l28-6v24.8a8 8 0 1 0 4 6.9V23L36 30.5z" fill="#fff" fill-opacity=".86"/>
-    <text x="73" y="27" text-anchor="middle" font-family="Segoe UI, Microsoft YaHei UI, sans-serif" font-size="17" font-weight="700" fill="#fff" fill-opacity=".9">${safeInitial}</text>
   </svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
+const fallbackArt = makeFallbackArt();
+const coverSrc = computed(() => art.value || lastArt.value || fallbackArt);
 
-const fallbackArt = computed(() => makeFallbackArt(media.title, media.artist));
-const coverSrc = computed(() => art.value || fallbackArt.value);
+// 先离屏加载，加载成功才换上去：换歌瞬间不会闪白/闪空
+function preloadArt(url, key) {
+  return new Promise(resolve => {
+    if (!url || !key) return resolve(false);
+    const probe = new Image();
+    probe.referrerPolicy = 'no-referrer';
+    probe.onload = () => resolve(key === wantKey);
+    probe.onerror = () => { badArt = url; resolve(false); };
+    probe.src = url;
+  });
+}
+
+function applyArt(url, key) {
+  if (!url || !key || key !== wantKey) return false;
+  art.value = url;
+  artKey = key;
+  lastArt.value = url;
+  return true;
+}
+
+async function useArt(url, key) {
+  const ok = await preloadArt(url, key);
+  return ok ? applyArt(url, key) : false;
+}
+
+// 换歌后立刻问一次这首歌的封面；没找到再补一次（每首歌最多两次）
+function requestArt(key) {
+  clearTimeout(artTimer);
+  artTries = 0;
+  if (!api || !api.mediaCover || !key) return;
+  artTimer = setTimeout(() => { fetchArt(key); }, 0);
+}
+
+async function fetchArt(key) {
+  if (!api || !api.mediaCover || key !== wantKey) return;
+  if (artKey === key && art.value) return;
+  if (artPending) return;
+  artPending = true;
+  try {
+    const res = await api.mediaCover({ title: media.title, artist: media.artist, duration: media.duration });
+    if (key !== wantKey) return;                       // 已经换歌了，迟到的结果直接丢弃
+    const url = res && res.cover ? String(res.cover) : '';
+    if (url && url !== badArt && await useArt(url, key)) return;
+    if (artKey !== key && artTries < 2) {
+      artTries += 1;
+      clearTimeout(artTimer);
+      artTimer = setTimeout(() => fetchArt(key), artTries === 1 ? 1200 : 3000);
+    }
+  } catch (err) {
+    if (artKey !== key && artTries < 2) {
+      artTries += 1;
+      clearTimeout(artTimer);
+      artTimer = setTimeout(() => fetchArt(key), 2000);
+    }
+  } finally {
+    artPending = false;
+  }
+}
+
+function onArtError() {
+  if (art.value) badArt = art.value;
+  art.value = '';
+  if (wantKey && artTries < 2) {
+    artTries += 1;
+    clearTimeout(artTimer);
+    artTimer = setTimeout(() => fetchArt(wantKey), 800);
+  }
+}
 
 const currentLyric = computed(() => {
   if (!lyricLines.value.length) return '';
@@ -101,9 +162,6 @@ function applyMedia(state) {
     lyricLines.value = [];
     lyricIndex.value = -1;
     lyricKey.value = '';
-    art.value = '';
-    artKey = '';
-    badArt = '';
     optimisticPlaying = null;
     optimisticUntil = 0;
     lastReportedPosition = -1;
@@ -119,7 +177,6 @@ function applyMedia(state) {
   }
   const nextTitle = state.title || '';
   const nextArtist = state.artist || '';
-  const nextKey = `${nextTitle}|${nextArtist}`;
   const changedTitle = nextTitle !== media.title || nextArtist !== media.artist;
   const reportedPosition = Number(state.position) || 0;
   const previousPlaying = media.playing;
@@ -149,46 +206,31 @@ function applyMedia(state) {
     media.position = localPosition;
   }
   lastReportedPosition = reportedPosition;
-  if (changedTitle) {
-    art.value = '';
-    artKey = nextKey;
+  const songKey = `${nextTitle}|${nextArtist}`;
+  const systemCover = typeof state.cover === 'string' ? state.cover : '';
+  if (songKey !== wantKey) {
+    wantKey = songKey;
+    artTries = 0;
     badArt = '';
+    artPending = false;
+    clearTimeout(artTimer);
+    if (!systemCover) {
+      // 播放器没给图：上一张继续挂着不空白，同时立刻去抓这首歌自己的封面
+      requestArt(songKey);
+    }
     loadLyrics();
   }
-  const systemCover = typeof state.cover === 'string' ? state.cover : '';
-  if (systemCover && systemCover !== badArt && (art.value !== systemCover || artKey !== nextKey)) {
-    art.value = systemCover;
-    artKey = nextKey;
+  if (systemCover && systemCover !== art.value) {
+    // 播放器自己给的缩略图和正在播的这首完全一致，拿到就立刻换上去
+    clearTimeout(artTimer);
+    useArt(systemCover, songKey);
   }
-}
-
-function preloadArt(url, key) {
-  if (!url || url === badArt) return;
-  const probe = new Image();
-  probe.referrerPolicy = 'no-referrer';
-  probe.onload = () => {
-    if (key !== lyricKey.value) return;   // 换歌了，丢弃旧结果
-    art.value = url;
-    artKey = key;
-  };
-  probe.onerror = () => {
-    if (key !== lyricKey.value) return;
-    if (art.value === url) art.value = '';
-  };
-  probe.src = url;
-}
-
-function onArtError() {
-  badArt = art.value;
-  art.value = '';
-  artKey = lyricKey.value;
 }
 
 async function loadLyrics(retry) {
   if (!retry) {
     lyricLines.value = [];
     lyricIndex.value = -1;
-    artRetry = 0;
   }
   const key = `${media.title}|${media.artist}`;
   lyricKey.value = key;
@@ -197,19 +239,6 @@ async function loadLyrics(retry) {
     const res = await api.mediaLyrics({ title: media.title, artist: media.artist });
     if (key !== lyricKey.value) return;
     lyricLines.value = res && Array.isArray(res.lines) ? res.lines : [];
-    // 新封面先预加载，加载成功才替换；失败则保留当前封面，不会出现“透明方块”
-    if (res && res.cover && res.cover !== badArt) {
-      if (res.cover !== art.value) preloadArt(res.cover, key);
-    } else if (!art.value || artKey !== key) {
-      art.value = '';
-      artKey = key;
-    }
-    // 封面偶尔第一把取不到（搜索接口抽风），隔几秒补一次，最多 2 次
-    if (!art.value && artRetry < 2) {
-      artRetry += 1;
-      clearTimeout(artTimer);
-      artTimer = setTimeout(() => { if (!art.value && key === lyricKey.value) loadLyrics(true); }, 3500);
-    }
   } catch (err) {
     lyricLines.value = [];
   }
@@ -307,7 +336,7 @@ watch(() => media.title + media.artist, () => { syncLyric(); });
     @pointerleave="hover = false"
     @pointerdown.stop="onTap"
   >
-    <div class="music-cover" :class="{ 'has-art': !!art }">
+    <div class="music-cover has-art">
       <img class="music-art" :src="coverSrc" alt="" draggable="false" referrerpolicy="no-referrer" @error="onArtError" />
     </div>
 

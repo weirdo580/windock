@@ -30,6 +30,20 @@ contextBridge.exposeInMainWorld('dockApi', {
   mediaGet: () => ipcRenderer.invoke('media:get'),
   mediaControl: (action) => ipcRenderer.invoke('media:control', action),
   mediaLyrics: (payload) => ipcRenderer.invoke('media:lyrics', payload),
+  mediaCover: (payload) => ipcRenderer.invoke('media:cover', payload),
+
+  statusGet: (force) => ipcRenderer.invoke('status:get', !!force),
+  statusAction: (kind) => ipcRenderer.invoke('status:action', kind),
+  statusPanel: (open) => ipcRenderer.invoke('status:panel', open),
+  quickRun: (action, value) => ipcRenderer.invoke('quick:run', action, value),
+  statusBrightness: (value) => ipcRenderer.invoke('status:brightness', value),
+  statusVolume: (payload) => ipcRenderer.invoke('status:volume', payload),
+  statusIme: () => ipcRenderer.invoke('status:ime'),
+  onStatus: (cb) => {
+    const fn = (e, payload) => cb(payload);
+    ipcRenderer.on('status:update', fn);
+    return () => ipcRenderer.removeListener('status:update', fn);
+  },
 
   minimizedGet: () => ipcRenderer.invoke('windows:minimized'),
   restoreWindow: (hwnd) => ipcRenderer.invoke('window:restore', hwnd),

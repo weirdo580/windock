@@ -10,7 +10,10 @@ const props = defineProps({
   bottom: { type: Number, default: 0 },
   open: { type: Boolean, default: false },
   systemIcons: { type: Object, default: () => ({}) },
-  containerWidth: { type: Number, default: 0 }
+  containerWidth: { type: Number, default: 0 },
+  dockHeight: { type: Number, default: 84 },
+  dockBottom: { type: Number, default: 0 },
+  stageHeight: { type: Number, default: 0 }
 });
 
 const emit = defineEmits(['toggle', 'launch', 'restore', 'close']);
@@ -145,17 +148,61 @@ function pick(item) {
 const previewItems = computed(() => props.items.slice(0, 4));
 const extraCount = computed(() => Math.max(0, props.items.length - previewItems.value.length));
 
-// 弹层以文件夹图标为锚点正上方展开，并夹在 Dock 的可用宽度内，避免跑到左侧。
-const popoverWidth = computed(() => {
+// 弹层固定长在 Dock 底板之上，永远不会压住 Dock 本体；
+// 宽度/高度跟着「装了几个应用」自己算，不出现滚动条：列数按可用高度自动加宽到放得下为止。
+const POP_PAD = 12;
+const POP_GAP = 8;
+const POP_CELL_W = 62;
+const POP_ENTRY_H = 53;   // 图标 38 + 间距 4 + 文字约 11
+const POP_TITLE_H = 22;
+const POP_ROWH = POP_ENTRY_H + POP_GAP;
+const POP_LIFT = 8; // 面板底边比 Dock 顶边再高出来的那一点点
+
+const popoverMaxWidth = computed(() => {
   const base = props.containerWidth > 0 ? props.containerWidth : window.innerWidth;
-  return Math.max(0, Math.min(360, base - 16));
+  return Math.max(0, base - 16);
 });
+
+const popoverMaxHeight = computed(() => {
+  const stage = window.innerHeight;
+  const above = stage - (props.dockBottom + props.dockHeight) - POP_LIFT - 8;
+  return Math.max(120, above);
+});
+
+const popoverColumns = computed(() => {
+  const n = Math.max(1, props.items.length);
+  const maxColsByWidth = Math.max(1, Math.floor((popoverMaxWidth.value - POP_PAD * 2 + POP_GAP) / (POP_CELL_W + POP_GAP)));
+  let cols = Math.min(n, 5);
+  // 行数放不下可用高度就把列数加宽，直到装得下或到宽度上限
+  while (cols < maxColsByWidth) {
+    const rows = Math.ceil(n / cols);
+    const need = POP_PAD * 2 + POP_TITLE_H + rows * POP_ENTRY_H + (rows - 1) * POP_GAP;
+    if (need <= popoverMaxHeight.value) break;
+    cols += 1;
+  }
+  return cols;
+});
+
+const popoverWidth = computed(() => Math.max(
+  0,
+  Math.min(
+    popoverMaxWidth.value,
+    POP_PAD * 2 + popoverColumns.value * POP_CELL_W + (popoverColumns.value - 1) * POP_GAP
+  )
+));
+
 const popoverLeft = computed(() => {
   const base = props.containerWidth > 0 ? props.containerWidth : window.innerWidth;
   const center = props.left + props.size / 2;
   const maxLeft = Math.max(8, base - popoverWidth.value - 8);
   return Math.max(8, Math.min(maxLeft, center - popoverWidth.value / 2));
 });
+
+// 底边永远在 Dock 顶边之上（不再是“图标底边 + 图标高度”那套，图标小的时候那样会压进 Dock）
+const popoverBottom = computed(() => props.dockHeight + POP_LIFT);
+const popoverGridStyle = computed(() => ({
+  gridTemplateColumns: `repeat(${popoverColumns.value}, minmax(0, 1fr))`
+}));
 </script>
 
 <template>
@@ -193,7 +240,8 @@ const popoverLeft = computed(() => {
       :style="{
         left: popoverLeft + 'px',
         width: popoverWidth + 'px',
-        bottom: (bottom + size + 10) + 'px'
+        maxHeight: popoverMaxHeight + 'px',
+        bottom: popoverBottom + 'px'
       }"
       @pointerdown.stop
       @click.stop
@@ -201,7 +249,7 @@ const popoverLeft = computed(() => {
       <div class="folder-popover-title">
         {{ kind === 'app' ? '更多应用' : '更多窗口' }}
       </div>
-      <div class="folder-popover-grid">
+      <div class="folder-popover-grid" :style="popoverGridStyle">
         <button
           v-for="item in items"
           :key="itemKey(item)"
@@ -300,13 +348,13 @@ const popoverLeft = computed(() => {
   position: absolute;
   z-index: 20;
   box-sizing: border-box;
-  max-height: 176px;
   padding: 12px;
   border-radius: 18px;
   background: rgba(30, 32, 38, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  overflow: auto;
+  /* 尺寸由列数算好，不留滚动条 */
+  overflow: hidden;
   color: #f5f5f7;
   pointer-events: auto;
 }
@@ -320,7 +368,6 @@ const popoverLeft = computed(() => {
 
 .folder-popover-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
   gap: 8px;
 }
 

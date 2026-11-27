@@ -19,6 +19,9 @@ const emit = defineEmits(['fallback']);
 // 真透明模式：玻璃不再铺一张桌面截图，而是让窗口后面的真实桌面直接透出来。
 // 这样壁纸位置与桌面完全一致，也不会把 Dock/悬浮提示拍进玻璃里。
 const CLEAR_GLASS = true;
+// 采样层整体往下挪一点：玻璃里显示的是 Dock 上方那截桌面，而不是把 Dock 自己
+// 也拍进去形成重影。这样窗口就不用设成“禁止截屏”，用户截图时 Dock 能正常出现。
+const SAMPLE_SHIFT = 76;
 const filterId = `liquid-glass-${Math.random().toString(36).slice(2, 10)}`;
 const refractionFilterId = `liquid-refraction-${Math.random().toString(36).slice(2, 10)}`;
 const videoRef = ref(null);
@@ -91,10 +94,15 @@ function delayEffectReady() {
   }, 240);
 }
 watch(effectActive, (active, was) => {
-  if (active && !was) delayEffectReady();
-  else if (!active) {
+  if (active && !was) {
+    delayEffectReady();
+    // 模糊层要有真实桌面画面才能显示，只在真的拖出数值后才开始采样，
+    // 归零就停掉，保持默认状态零开销。
+    startFallback();
+  } else if (!active) {
     clearTimeout(effectReadyTimer);
     effectReady.value = true;
+    stopFallback();
   }
 });
 const effectLayerStyle = computed(() => {
@@ -108,9 +116,9 @@ const effectLayerStyle = computed(() => {
     const preFilter = 'blur(24px)';
     return { opacity: '0.6', filter: preFilter, WebkitFilter: preFilter };
   }
-  const layerBlur = Math.max(4, Math.min(40, Math.round(blurSetting * 16)));
+  const layerBlur = Math.max(8, Math.min(48, Math.round(6 + blurSetting * 20)));
   const filter = `blur(${layerBlur}px)`;
-  const opacity = Math.min(1, 0.55 + s * 0.45);
+  const opacity = Math.min(1, 0.7 + s * 0.3);
   return {
     opacity: opacity.toFixed(3),
     filter,
@@ -193,7 +201,7 @@ const liveSourceStyle = computed(() => {
   const geometry = displayGeometry(props.winInfo?.display);
   if (!p) return {};
   const left = geometry.left - p.x;
-  const top = geometry.top - p.y;
+  const top = geometry.top + SAMPLE_SHIFT - p.y;
   return {
     left: `${left}px`,
     top: `${top}px`,
@@ -216,7 +224,7 @@ const fallbackSourceStyle = computed(() => {
   if (!p) return {};
   if (strip) {
     const left = geometry.left - p.x;
-    const top = geometry.top + strip.y - p.y;
+    const top = geometry.top + strip.y + SAMPLE_SHIFT - p.y;
     return {
       left: `${left}px`,
       top: `${top}px`,
@@ -232,7 +240,7 @@ const fallbackSourceStyle = computed(() => {
     };
   }
   const left = geometry.left - p.x;
-  const top = geometry.top - p.y;
+  const top = geometry.top + SAMPLE_SHIFT - p.y;
   return {
     left: `${left}px`,
     top: `${top}px`,
@@ -280,6 +288,17 @@ function startFallback() {
   fallbackCapture.start();
 }
 
+function stopFallback() {
+  if (fallbackCapture) {
+    fallbackCapture.stop();
+    fallbackCapture = null;
+  }
+  fallbackReady.value = false;
+  fallbackUrl.value = '';
+  fallbackDisplay.value = null;
+  fallbackStrip.value = null;
+}
+
 async function useLiveDisplay(mediaStream) {
   if (!alive) {
     mediaStream.getTracks().forEach(track => track.stop());
@@ -315,7 +334,9 @@ async function useLiveDisplay(mediaStream) {
 
 
 onMounted(() => {
-  startFallback();
+  // 真透明模式下玻璃根本不铺桌面截图（背景交给真实桌面），
+  // 之前仍然每 33ms 抓一次全屏，纯属白烧 CPU，是整机发卡的主因，这里直接跳过。
+  if (!CLEAR_GLASS || effectActive.value) startFallback();
   if (window.dockApi && window.dockApi.onCaptureReset) {
     offCaptureReset = window.dockApi.onCaptureReset(payload => {
       const at = Number(payload && payload.at) || Date.now();

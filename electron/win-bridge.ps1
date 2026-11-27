@@ -1,4 +1,4 @@
-# Minimized-windows bridge + dock z-order keeper.
+﻿# Minimized-windows bridge + dock z-order keeper.
 # Emits one JSON line every ~200ms:
 # {"ok":true,"fullscreen":false,"z":"top|below|free|","items":[{"h":<hwnd>,"t":"<title>","e":"<exe path>"}]}
 #
@@ -55,6 +55,7 @@ public class MinWin {
   const int DWMWA_CLOAKED = 14;
   static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
   static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+  static readonly IntPtr HWND_TOP = new IntPtr(0);
   const uint SWP_NOSIZE = 0x0001;
   const uint SWP_NOMOVE = 0x0002;
   const uint SWP_NOACTIVATE = 0x0010;
@@ -237,13 +238,27 @@ public class MinWin {
     if (!IsWindowVisible(dock)) return "";
 
     IntPtr lastOverlap = IntPtr.Zero;
+    int lastOverlapIndex = -1;
+    IntPtr desktopWnd = IntPtr.Zero;
+    int desktopIndex = -1;
     int dockIndex = -1;
     int i = 0;
     EnumWindows(delegate(IntPtr h, IntPtr l) {
       if (h == dock) {
         dockIndex = i;
-      } else if (Blocks(h, dock, zl, zt, zr, zb)) {
-        lastOverlap = h; // keep the last one: deepest overlap wins
+      } else {
+        StringBuilder cls = new StringBuilder(256);
+        GetClassName(h, cls, 256);
+        string cn = cls.ToString();
+        // The desktop shell (Progman / wallpaper WorkerW) is the floor: the
+        // dock must never sink below it, or a desktop refresh hides the dock
+        // behind the wallpaper. Remember the topmost such window.
+        if ((cn == "Progman" || cn == "WorkerW") && IsWindowVisible(h) && desktopWnd == IntPtr.Zero) {
+          desktopWnd = h; desktopIndex = i;
+        }
+        if (Blocks(h, dock, zl, zt, zr, zb)) {
+          lastOverlap = h; lastOverlapIndex = i; // deepest overlap wins
+        }
       }
       i++;
       return true;
@@ -257,12 +272,33 @@ public class MinWin {
       return "top";
     }
 
-    // Always-on-top off: clear topmost, then sink below the deepest overlapping window.
+    // Always-on-top off: clear topmost, then sink below the deepest overlapping
+    // window — but never below the desktop shell. When the desktop is focused,
+    // Explorer raises Progman above every app window, so sinking below an app
+    // would also drop the dock behind the wallpaper; clamp to the desktop floor.
     if (IsTopMost(dock)) SetWindowPos(dock, HWND_NOTOPMOST, 0, 0, 0, 0, ZFLAGS);
+    // Anchor that places the dock just ABOVE the desktop shell. HWND_NOTOPMOST
+    // is a no-op once the dock is already non-topmost, so insert relative to the
+    // window that currently sits directly above Progman/WorkerW instead.
+    IntPtr aboveDesktop = IntPtr.Zero;
+    if (desktopWnd != IntPtr.Zero) {
+      aboveDesktop = GetWindow(desktopWnd, 3 /* GW_HWNDPREV */);
+      if (aboveDesktop == IntPtr.Zero || aboveDesktop == dock) aboveDesktop = HWND_TOP;
+    }
     if (lastOverlap != IntPtr.Zero) {
-      SetWindowPos(dock, lastOverlap, 0, 0, 0, 0, ZFLAGS);
+      if (desktopWnd != IntPtr.Zero && lastOverlapIndex > desktopIndex) {
+        // Overlapping window is below the desktop shell (desktop focused):
+        // keep the dock above the wallpaper rather than hiding it.
+        if (aboveDesktop != IntPtr.Zero) SetWindowPos(dock, aboveDesktop, 0, 0, 0, 0, ZFLAGS);
+      } else {
+        SetWindowPos(dock, lastOverlap, 0, 0, 0, 0, ZFLAGS);
+      }
       return "below";
     }
+    // No app window overlaps the dock card. Sit just above the desktop shell so
+    // an Explorer desktop refresh cannot leave the dock behind Progman/WorkerW.
+    // This does not make the dock topmost: overlapping apps are handled above.
+    if (aboveDesktop != IntPtr.Zero) SetWindowPos(dock, aboveDesktop, 0, 0, 0, 0, ZFLAGS);
     return "free";
   }
 
@@ -332,8 +368,13 @@ while ($true) {
   } catch { }
 
   $json = @{ ok = $true; fullscreen = $fullscreen; z = $z; items = $items } | ConvertTo-Json -Depth 4 -Compress
-  $bytes = [System.Text.Encoding]::UTF8.GetBytes($json + "`n")
-  [Console]::OpenStandardOutput().Write($bytes, 0, $bytes.Length)
-  [Console]::OpenStandardOutput().Flush()
+  # 只在内容真变了才推：原来 5Hz 无条件输出，Electron 每次都转发给渲染层，
+  # 常驻的 Dock 因此每秒重绘 5 次（带 SVG/背景模糊，非常费 CPU）。
+  if ($json -ne $lastJson) {
+    $lastJson = $json
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json + "`n")
+    [Console]::OpenStandardOutput().Write($bytes, 0, $bytes.Length)
+    [Console]::OpenStandardOutput().Flush()
+  }
   Start-Sleep -Milliseconds 200
 }

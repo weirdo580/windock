@@ -1,0 +1,13 @@
+/* 快捷面板：整窗透明，玻璃由 LiquidGlass 绘制（与 Dock 同款） */
+html.quick-mode,
+html.quick-mode body {
+  background: transparent;
+  cursor: default;
+  overflow: hidden;
+}
+
+html.quick-mode #app {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}

@@ -1,6 +1,6 @@
 {
   "name": "windock",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
   "description": "Windows 上的 Electron + Vue3 + WebGL 液态玻璃 Dock",
   "main": "electron/main.cjs",
@@ -63,6 +63,26 @@
       {
         "from": "electron/win-bridge.ps1",
         "to": "win-bridge.ps1"
+      },
+      {
+        "from": "electron/status-bridge.ps1",
+        "to": "status-bridge.ps1"
+      },
+      {
+        "from": "electron/status-act.ps1",
+        "to": "status-act.ps1"
+      },
+      {
+        "from": "electron/quick-act.ps1",
+        "to": "quick-act.ps1"
+      },
+      {
+        "from": "electron/status-watch.ps1",
+        "to": "status-watch.ps1"
+      },
+      {
+        "from": "electron/ime-listen.ps1",
+        "to": "ime-listen.ps1"
       },
       {
         "from": "electron/win-restore.ps1",

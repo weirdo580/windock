@@ -10,9 +10,12 @@ const loading = ref(true);
 const saving = ref(false);
 const message = ref('');
 const previewing = ref(false);
+// 首次启动的上手引导（只在第一次打开时展开）
+const welcome = ref(false);
 const appIcons = reactive({});
 const iconCache = new Map();
 let offConfig = null;
+let offAction = null;
 let previewTimer = null;
 let saveTimer = null;
 let previewPending = false;
@@ -315,6 +318,10 @@ const previewDockStyle = computed(() => {
 
 onMounted(async () => {
   document.title = 'WinDock 设置';
+  // 首次启动：主进程用 ?welcome=1 打开设置页，这里展开一次引导
+  try {
+    if (new URLSearchParams(window.location.search).get('welcome') === '1') welcome.value = true;
+  } catch (err) { /* 忽略 */ }
   if (!api) {
     loading.value = false;
     showMessage('未检测到 Dock 接口');
@@ -325,10 +332,21 @@ onMounted(async () => {
   offConfig = api.onConfigUpdated(payload => {
     if (payload?.config && !dirty.value) applyConfig(payload.config);
   });
+  if (api.onAction) {
+    offAction = api.onAction(payload => {
+      if (payload && payload.type === 'welcome') welcome.value = true;
+    });
+  }
 });
+
+function dismissWelcome() {
+  welcome.value = false;
+  try { window.history.replaceState(null, '', window.location.pathname + '#settings'); } catch (err) { /* 忽略 */ }
+}
 
 onBeforeUnmount(() => {
   if (offConfig) offConfig();
+  if (offAction) offAction();
   clearTimeout(showMessage.timer);
   clearTimeout(previewTimer);
   clearTimeout(saveTimer);
@@ -387,6 +405,23 @@ watch(draft, () => {
     </header>
 
     <main class="settings-content">
+        <aside v-if="welcome" class="welcome-card">
+          <div class="welcome-copy">
+            <span class="welcome-eyebrow">第一次使用</span>
+            <h2>三步把 WinDock 用顺手</h2>
+            <ol>
+              <li><strong>添加自己的软件：</strong>切到「软件」标签，点右上角「添加应用」，选 exe 或快捷方式，图标会自动抓取。</li>
+              <li><strong>外观改动是即时的：</strong>拖大小、圆角、模糊这些滑杆时 Dock 会跟着变，不用点保存。</li>
+              <li><strong>开机就想看到它：</strong>「行为」里打开「开机自启动」，登录后 Dock 自动出现。</li>
+            </ol>
+            <p class="welcome-note">Dock 会自动把放不下的应用收进文件夹，窗口标题太长会以省略号收尾；所有设置都会存到这台电脑的用户目录，换电脑需要重新配。</p>
+          </div>
+          <div class="welcome-actions">
+            <button class="button primary" @click="dismissWelcome(); activeTab = 'apps'">去添加应用</button>
+            <button class="button" @click="dismissWelcome">知道了</button>
+          </div>
+        </aside>
+
         <div v-if="loading" class="loading-state">正在读取 Dock 配置…</div>
 
         <section v-else class="preview-card">
@@ -576,7 +611,7 @@ watch(draft, () => {
                 <div><h2>显示行为</h2><p>控制 Dock 何时出现，以及如何与窗口配合。</p></div>
               </div>
               <label class="toggle-row">
-                <span><b>始终置顶</b><small>保持 Dock 显示在其他普通窗口上方</small></span>
+                <span><b>始终置顶</b><small>Dock 恒定在所有窗口之上，任何软件都盖不住它</small></span>
                 <input v-model="draft.global.alwaysOnTop" class="switch" type="checkbox" />
               </label>
               <label class="toggle-row">
@@ -846,6 +881,55 @@ watch(draft, () => {
   margin-left: auto;
   margin-right: auto;
 }
+
+/* 首次启动引导：顶部一条，不挡住下面的设置内容 */
+.welcome-card {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  border: 1px solid rgba(111, 149, 216, 0.32);
+  border-radius: 14px;
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(79, 121, 199, 0.16), transparent 58%),
+    var(--panel);
+}
+.welcome-copy { min-width: 0; flex: 1; }
+.welcome-eyebrow {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.welcome-copy h2 {
+  margin: 6px 0 8px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+.welcome-copy ol {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11px;
+  line-height: 1.75;
+  color: var(--muted);
+}
+.welcome-copy strong { color: var(--text); font-weight: 600; }
+.welcome-note {
+  margin: 8px 0 0;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: rgba(138, 145, 153, 0.85);
+}
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: none;
+}
+.welcome-actions .button { white-space: nowrap; }
 .settings-content::-webkit-scrollbar { width: 10px; }
 .settings-content::-webkit-scrollbar-track { background: transparent; }
 .settings-content::-webkit-scrollbar-thumb {
