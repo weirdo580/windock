@@ -18,6 +18,8 @@ WinDock 是给 Windows 桌面用的程序坞。它贴在屏幕底部，默认保
 
 ![WinDock 桌面 Dock](docs/images/hero.png)
 
+![WinDock 动效演示：图标磁吸放大、Tooltip、最右侧系统状态胶囊](docs/images/demo.gif)
+
 ## 功能
 
 ### 液态玻璃底座

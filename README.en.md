@@ -17,6 +17,8 @@ WinDock lives at the bottom of your screen. It stays quiet by default; hover an 
 
 ![WinDock Dock on Windows](docs/images/hero.png)
 
+![WinDock in motion: icon magnification, tooltip, status capsule on the far right](docs/images/demo.gif)
+
 ## Features
 
 ### Liquid glass base
